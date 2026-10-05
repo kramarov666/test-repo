@@ -1,0 +1,148 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-investigator
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-investigator
+  namespace: ai-investigator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ai-investigator-read-only
+  namespace: monitoring
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ai-investigator-read-only
+  namespace: fluent-operator
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ai-investigator-read-only
+  namespace: ping-demo1
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ai-investigator-read-only
+  namespace: monitoring
+subjects:
+  - kind: ServiceAccount
+    name: ai-investigator
+    namespace: ai-investigator
+roleRef:
+  kind: Role
+  name: ai-investigator-read-only
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ai-investigator-read-only
+  namespace: fluent-operator
+subjects:
+  - kind: ServiceAccount
+    name: ai-investigator
+    namespace: ai-investigator
+roleRef:
+  kind: Role
+  name: ai-investigator-read-only
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ai-investigator-read-only
+  namespace: ping-demo1
+subjects:
+  - kind: ServiceAccount
+    name: ai-investigator
+    namespace: ai-investigator
+roleRef:
+  kind: Role
+  name: ai-investigator-read-only
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-investigator-config
+  namespace: ai-investigator
+data:
+  GEMINI_MODEL: gemini-3-flash-preview
+  MAX_GEMINI_REQUESTS_PER_MINUTE: "4"
+  MAX_MODEL_CALLS_PER_CHAT: "4"
+  PROMETHEUS_URL: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-investigator
+  namespace: ai-investigator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-investigator
+  template:
+    metadata:
+      labels:
+        app: ai-investigator
+    spec:
+      serviceAccountName: ai-investigator
+      containers:
+        - name: agent
+          image: ai-investigator:v1.0.3
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: ai-investigator-config
+            - secretRef:
+                name: ai-investigator-gemini
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-investigator
+  namespace: ai-investigator
+spec:
+  selector:
+    app: ai-investigator
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
